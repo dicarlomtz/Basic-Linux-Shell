@@ -60,8 +60,6 @@ int main()
 
 char *readInput()
 {
-    fflush(stdin);
-    fflush(stdin);
     char *command = malloc(MAXLENGTH);
     printf("\nUser>");
     gets(command);
@@ -228,15 +226,22 @@ void saveCommand(char *command)
 
     if (!saved)
     {
-        if (savedCommands < MAXLENGTH)
+        if (newCmd[0] != '!')
         {
-            commandsLog[savedCommands++] = newCmd;
+            if (savedCommands < MAXLENGTH)
+            {
+                commandsLog[savedCommands++] = newCmd;
+            }
+            else
+            {
+                free(commandsLog[0]);
+                commandsLog[0] = commandsLog[MAXLENGTH - 1];
+                commandsLog[MAXLENGTH - 1] = newCmd;
+            }
         }
         else
         {
-            free(commandsLog[0]);
-            commandsLog[0] = commandsLog[MAXLENGTH - 1];
-            commandsLog[MAXLENGTH - 1] = newCmd;
+            free(newCmd);
         }
     }
     else
@@ -321,7 +326,7 @@ void doProcess()
 
 void systemCall(char *command)
 {
-    pid_t pid;
+    pid_t pid, pid2;
     struct parsedCommand *parsedCMD = parseCommand(command);
 
     if (!parsedCMD->ownCmd)
@@ -356,14 +361,14 @@ void systemCall(char *command)
         {
             if (parsedCMD->piped)
             {
-                pid = fork();
+                pid2 = fork();
 
-                if (pid < 0)
+                if (pid2 < 0)
                 {
                     fprintf(stderr, "Error al llamar a fork();\n");
                     exit(-1);
                 }
-                else if (pid == 0)
+                else if (pid2 == 0)
                 {
                     redirectInput();
                     closePipeReadWrite();
@@ -374,8 +379,8 @@ void systemCall(char *command)
                     closePipeReadWrite();
                     if (!parsedCMD->background)
                     {
-                        int status;
-                        waitpid(pid, &status, 0);
+                        waitpid(pid, NULL, 0);
+                        waitpid(pid2, NULL, 0);
                     }
                 }
             }
@@ -383,7 +388,7 @@ void systemCall(char *command)
             {
                 if (!parsedCMD->background)
                 {
-                    wait(NULL);
+                    waitpid(pid, NULL, 0);
                 }
             }
         }
