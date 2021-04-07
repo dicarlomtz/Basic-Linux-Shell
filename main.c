@@ -14,7 +14,7 @@
 #define READ_END 0
 #define WRITE_END 1
 
-bool flag = true;
+int flag = 1;
 int fd[2];
 
 int savedCommands = 0;
@@ -60,9 +60,12 @@ int main()
 
 char *readInput()
 {
+    fflush(stdin);
+    fflush(stdin);
     char *command = malloc(MAXLENGTH);
     printf("\nUser>");
     gets(command);
+    return command;
 }
 
 char **parseSpace(char *command)
@@ -271,7 +274,7 @@ void exitOwnHandler()
     {
         free(commandsLog[i]);
     }
-    flag = false;
+    flag = 0;
 }
 
 void useExec(char **command)
@@ -305,8 +308,15 @@ void executeOwn(char **command)
 void doProcess()
 {
     char *command = readInput();
-    systemCall(command);
-    saveCommand(command);
+    if (strlen(command) > 0)
+    {
+        systemCall(command);
+        saveCommand(command);
+    }
+    else
+    {
+        fprintf(stderr, "Debe introducir un comando\n");
+    }
 }
 
 void systemCall(char *command)
@@ -314,73 +324,73 @@ void systemCall(char *command)
     pid_t pid;
     struct parsedCommand *parsedCMD = parseCommand(command);
 
-    if (parsedCMD->piped)
+    if (!parsedCMD->ownCmd)
     {
-        if (pipe(fd) < 0)
-        {
-            fprintf(stderr, "Error al llamar a pipe();\n");
-            exit(-1);
-        }
-    }
 
-    pid = fork();
-
-    if (pid < 0)
-    {
-        fprintf(stderr, "Error al llamar a fork();\n");
-        exit(-1);
-    }
-    else if (pid == 0)
-    {
         if (parsedCMD->piped)
         {
-            redirectOutput();
-            closePipeReadWrite();
+            if (pipe(fd) < 0)
+            {
+                fprintf(stderr, "Error al llamar a pipe();\n");
+                exit(-1);
+            }
         }
 
-        if (!parsedCMD->ownCmd)
+        pid = fork();
+
+        if (pid < 0)
         {
+            fprintf(stderr, "Error al llamar a fork();\n");
+            exit(-1);
+        }
+        else if (pid == 0)
+        {
+            if (parsedCMD->piped)
+            {
+                redirectOutput();
+                closePipeReadWrite();
+            }
             useExec(parsedCMD->parsedArg);
         }
         else
         {
-            executeOwn(parsedCMD->parsedArg);
+            if (parsedCMD->piped)
+            {
+                pid = fork();
+
+                if (pid < 0)
+                {
+                    fprintf(stderr, "Error al llamar a fork();\n");
+                    exit(-1);
+                }
+                else if (pid == 0)
+                {
+                    redirectInput();
+                    closePipeReadWrite();
+                    useExec(parsedCMD->parsedArgPipe);
+                }
+                else
+                {
+                    closePipeReadWrite();
+                    if (!parsedCMD->background)
+                    {
+                        int status;
+                        waitpid(pid, &status, 0);
+                    }
+                }
+            }
+            else
+            {
+                if (!parsedCMD->background)
+                {
+                    wait(NULL);
+                }
+            }
         }
     }
     else
     {
-        if (parsedCMD->piped)
-        {
-            pid = fork();
-
-            if (pid < 0)
-            {
-                fprintf(stderr, "Error al llamar a fork();\n");
-                exit(-1);
-            }
-            else if (pid == 0)
-            {
-                redirectInput();
-                closePipeReadWrite();
-                useExec(parsedCMD->parsedArgPipe);
-            }
-            else
-            {
-                closePipeReadWrite();
-                if (!parsedCMD->background)
-                {
-                    int status;
-                    waitpid(pid, &status, 0);
-                }
-            }
-        }
-        else
-        {
-            if (!parsedCMD->background)
-            {
-                wait(NULL);
-            }
-        }
+        executeOwn(parsedCMD->parsedArg);
     }
 }
 
@@ -389,5 +399,5 @@ void loopSystemCall()
     do
     {
         doProcess();
-    } while (flag);
+    } while (flag == 1);
 }
