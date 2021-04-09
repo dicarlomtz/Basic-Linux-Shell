@@ -219,6 +219,16 @@ struct parsedCommand *parseCommand(char *cmd)
         free(pipedCmd);
     }
 
+    if (pc->background && pc->piped)
+    {
+        free(pc->parsedArg);
+        free(pc->parsedArgPipe);
+        free(pc);
+        free(cmd);
+        fprintf(stderr, "No se pueden usar pipes en el background\n");
+        exit(-1);
+    }
+
     return pc;
 }
 
@@ -370,6 +380,10 @@ void systemCall(char *cmd)
                 closePipeReadWrite();
             }
             useExec(parsedCmd->parsedArg);
+            if (!parsedCmd->piped)
+            {
+                free(parsedCmd);
+            }
         }
         else
         {
@@ -387,6 +401,7 @@ void systemCall(char *cmd)
                     redirectInput();
                     closePipeReadWrite();
                     useExec(parsedCmd->parsedArgPipe);
+                    free(parsedCmd);
                 }
                 else
                 {
