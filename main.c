@@ -26,134 +26,162 @@ struct parsedCommand
     char **parsedArgPipe;
     bool background;
     bool piped;
-    bool ownCmd;
+    bool own;
 };
 
 char *readInput();
 
-char **parseSpace(char *command);
-char **parsePipe(char *command);
-int parseBackground(char *command);
-char **parseOwn(char *command);
-struct parsedCommand *parseCommand(char *command);
+int parseBackground(char *cmd);
+char **parseOwn(char *cmd);
+char **parseSpace(char *cmd);
+char **parsePipe(char *cmd);
+struct parsedCommand *parseCommand(char *cmd);
+
+void saveCmd(char *cmd);
+void historyHandler();
+void nthHandler(int position);
+void exitHandler();
 
 void redirectOutput();
 void redirectInput();
 void closePipeReadWrite();
 
-void saveCommand(char *command);
-void historyOwnHandler();
-void nthOwnHandler(int position);
-void exitOwnHandler();
+void useExec(char **cmd);
+void executeOwn(char **cmd);
+void systemCall(char *cmd);
 
-void useExec(char **command);
-void executeOwn(char **command);
 void doProcess();
-void systemCall(char *command);
-void loopSystemCall();
+void loopProcess();
 
 int main()
 {
-    loopSystemCall();
+    loopProcess();
     return 0;
 }
 
 char *readInput()
 {
-    char *command = malloc(MAXLENGTH);
+    char *cmd = malloc(MAXLENGTH);
+
     printf("\nUser>");
-    gets(command);
-    return command;
+    gets(cmd);
+
+    return cmd;
 }
 
-char **parseSpace(char *command)
+int parseBackground(char *cmd)
 {
-    char **parsedCommand = malloc(MAXLENGTH);
-    char *token = strtok(command, " ");
-    int i = 0;
-    while (token != NULL && i < (MAXLENGTH - 1))
-    {
-        parsedCommand[i++] = token;
-        token = strtok(NULL, " ");
-    }
-    parsedCommand[i] = NULL;
-    return parsedCommand;
-}
+    char backgroundSymbol = '&';
+    int len = strlen(cmd);
 
-char **parsePipe(char *command)
-{
-    char **parsedCommand = malloc(2);
-    char *token = strtok(command, "|");
-    int i = 0;
-    while (token != NULL && i < 2)
-    {
-        parsedCommand[i++] = token;
-        token = strtok(NULL, "|");
-    }
-    if (i == 1)
-    {
-        parsedCommand[i] = NULL;
-    }
-    return parsedCommand;
-}
-
-int parseBackground(char *command)
-{
-    char backgroundSimbol[1] = "&";
-    int len = strlen(command);
-    if (command[len - 1] == backgroundSimbol[0])
+    if (cmd[len - 1] == backgroundSymbol)
     {
         return len - 1;
     }
 
-    return -10;
+    return -1;
 }
 
-char **parseOwn(char *command)
+char **parseOwn(char *cmd)
 {
-    char **parsedOwn = malloc(1);
-    parsedOwn[0] = NULL;
-    if (strcmp(command, "history") == 0)
+    char **parsed = malloc(1);
+    parsed[0] = NULL;
+
+    if (strcmp(cmd, "history") == 0)
     {
-        parsedOwn[0] = "history";
+        parsed[0] = "history";
     }
-    else if (strcmp(command, "exit") == 0)
+    else if (strcmp(cmd, "exit") == 0)
     {
-        parsedOwn[0] = "exit";
+        parsed[0] = "exit";
     }
-    else if (command[0] == '!' && strlen(command) >= 2)
+    else if (cmd[0] == '!')
     {
-        int len = strlen(command);
-        for (int i = 1; i < len; i++)
+        if (strlen(cmd) >= 2)
         {
-            if (!isdigit(command[i]))
+            int len = strlen(cmd);
+            for (int i = 1; i < len; i++)
             {
-                free(command);
-                fprintf(stderr, "Solo se admiten números después de '!'\n");
-                exit(-1);
+                if (!isdigit(cmd[i]))
+                {
+                    free(cmd);
+                    free(parsed);
+                    fprintf(stderr, "Solo se admiten números después de '!'\n");
+                    exit(-1);
+                }
             }
+            cmd++;
+            char numbers[50];
+            sprintf(numbers, "%d", atoi(cmd));
+            parsed[0] = numbers;
         }
-        command++;
-        char numbers[50];
-        sprintf(numbers, "%d", atoi(command));
-        parsedOwn[0] = numbers;
+        else
+        {
+            free(cmd);
+            free(parsed);
+            fprintf(stderr, "Debe ingresar la posición de un comando en history después de '!'\n");
+            exit(-1);
+        }
     }
 
-    return parsedOwn;
+    return parsed;
+}
+
+char **parseSpace(char *cmd)
+{
+    char **parsed = malloc(MAXLENGTH);
+    char *token = strtok(cmd, " ");
+    int i = 0;
+
+    while (token != NULL && i < (MAXLENGTH - 1))
+    {
+        parsed[i++] = token;
+        token = strtok(NULL, " ");
+    }
+
+    parsed[i] = NULL;
+    return parsed;
+}
+
+char **parsePipe(char *cmd)
+{
+    char **parsed = malloc(2);
+    char *token = strtok(cmd, "|");
+    int i = 0;
+
+    while (token != NULL && i < 2)
+    {
+        parsed[i++] = token;
+        token = strtok(NULL, "|");
+    }
+
+    if (i == 1)
+    {
+        parsed[i] = NULL;
+    }
+
+    return parsed;
 }
 
 struct parsedCommand *parseCommand(char *cmd)
 {
-    char command[MAXLENGTH];
-    struct parsedCommand *pc = malloc(sizeof(struct parsedCommand));
-    strcpy(command, cmd);
 
-    int aux = 0;
-    aux = parseBackground(command);
-    if (aux != -10)
+    if (strlen(cmd) <= 0)
+    {
+        free(cmd);
+        fprintf(stderr, "Debe ingresar un comando válido");
+        exit(-1);
+    }
+
+    char newCmd[MAXLENGTH];
+    struct parsedCommand *pc = malloc(sizeof(struct parsedCommand));
+    strcpy(newCmd, cmd);
+
+    int backgroundSymbolPosition = parseBackground(newCmd);
+    if (backgroundSymbolPosition != -1)
     {
         pc->background = true;
-        command[aux] = '\0';
+        newCmd[backgroundSymbolPosition] = '\0';
     }
     else
     {
@@ -163,61 +191,46 @@ struct parsedCommand *parseCommand(char *cmd)
     char **ownCmd = parseOwn(cmd);
     if (ownCmd[0] != NULL)
     {
-        pc->ownCmd = true;
+        pc->own = true;
         pc->piped = false;
         memcpy(&pc->parsedArg, &ownCmd, sizeof(ownCmd));
         pc->parsedArg = ownCmd;
     }
     else
     {
-        pc->ownCmd = false;
         free(ownCmd);
-        char **pipedCommand = parsePipe(command);
-        if (pipedCommand[1] == NULL)
+        pc->own = false;
+        char **pipedCmd = parsePipe(newCmd);
+        if (pipedCmd[1] == NULL)
         {
-            char **arg = parseSpace(command);
+            char **arg = parseSpace(newCmd);
             memcpy(&pc->parsedArg, &arg, sizeof(arg));
             pc->piped = false;
         }
         else
         {
-            char **firstArg = parseSpace(pipedCommand[0]);
-            char **secondArg = parseSpace(pipedCommand[1]);
+            char **firstArg = parseSpace(pipedCmd[0]);
+            char **secondArg = parseSpace(pipedCmd[1]);
             memcpy(&pc->parsedArg, &firstArg, sizeof(firstArg));
             memcpy(&pc->parsedArgPipe, &secondArg, sizeof(secondArg));
             pc->piped = true;
         }
 
-        free(pipedCommand);
+        free(pipedCmd);
     }
 
     return pc;
 }
 
-void redirectOutput()
+void saveCmd(char *cmd)
 {
-    dup2(fd[WRITE_END], STDOUT_FILENO);
-}
-void redirectInput()
-{
-    dup2(fd[READ_END], STDIN_FILENO);
-}
-
-void closePipeReadWrite()
-{
-    close(fd[READ_END]);
-    close(fd[WRITE_END]);
-}
-
-void saveCommand(char *command)
-{
-    char *newCmd = malloc(strlen(command) + 2);
+    char *newCmd = malloc(strlen(cmd) + 2);
     bool saved = false;
-    strcpy(newCmd, command);
+    strcpy(newCmd, cmd);
 
     for (int i = 0; i < savedCommands; i++)
     {
-        if (strcmp(command, commandsLog[i]) == 0)
+        if (strcmp(cmd, commandsLog[i]) == 0)
         {
             saved = true;
             break;
@@ -248,19 +261,19 @@ void saveCommand(char *command)
     {
         free(newCmd);
     }
-    free(command);
+
+    free(cmd);
 }
 
-void historyOwnHandler()
+void historyHandler()
 {
-    printf("\n");
     for (int i = 0; i < savedCommands; i++)
     {
         printf("%d. %s\n", i + 1, commandsLog[i]);
     }
 }
 
-void nthOwnHandler(int position)
+void nthHandler(int position)
 {
     if (position > savedCommands)
     {
@@ -273,7 +286,7 @@ void nthOwnHandler(int position)
     }
 }
 
-void exitOwnHandler()
+void exitHandler()
 {
     for (int i = 0; i < savedCommands; i++)
     {
@@ -282,57 +295,58 @@ void exitOwnHandler()
     flag = 0;
 }
 
-void useExec(char **command)
+void redirectOutput()
 {
-    if (execvp(command[0], command) < 0)
+    dup2(fd[WRITE_END], STDOUT_FILENO);
+}
+void redirectInput()
+{
+    dup2(fd[READ_END], STDIN_FILENO);
+}
+
+void closePipeReadWrite()
+{
+    close(fd[READ_END]);
+    close(fd[WRITE_END]);
+}
+
+void useExec(char **cmd)
+{
+    if (execvp(cmd[0], cmd) < 0)
     {
-        free(command);
+        free(cmd);
         fprintf(stderr, "Error al llamar a execvp();\n");
         exit(-1);
     }
-    free(command);
+    free(cmd);
 }
 
-void executeOwn(char **command)
+void executeOwn(char **cmd)
 {
-    if (strcmp(command[0], "history") == 0)
+    if (strcmp(cmd[0], "history") == 0)
     {
-        historyOwnHandler(commandsLog);
+        historyHandler(cmd);
     }
-    else if (strcmp(command[0], "exit") == 0)
+    else if (strcmp(cmd[0], "exit") == 0)
     {
-        exitOwnHandler();
+        exitHandler();
     }
     else
     {
-        nthOwnHandler(atoi(command[0]));
+        nthHandler(atoi(cmd[0]));
     }
-    free(command);
+    free(cmd);
 }
 
-void doProcess()
+void systemCall(char *cmd)
 {
-    char *command = readInput();
-    if (strlen(command) > 0)
-    {
-        systemCall(command);
-        saveCommand(command);
-    }
-    else
-    {
-        fprintf(stderr, "Debe introducir un comando\n");
-    }
-}
+    pid_t f_pid, s_pid;
+    struct parsedCommand *parsedCmd = parseCommand(cmd);
 
-void systemCall(char *command)
-{
-    pid_t pid, pid2;
-    struct parsedCommand *parsedCMD = parseCommand(command);
-
-    if (!parsedCMD->ownCmd)
+    if (!parsedCmd->own)
     {
 
-        if (parsedCMD->piped)
+        if (parsedCmd->piped)
         {
             if (pipe(fd) < 0)
             {
@@ -341,65 +355,73 @@ void systemCall(char *command)
             }
         }
 
-        pid = fork();
+        f_pid = fork();
 
-        if (pid < 0)
+        if (f_pid < 0)
         {
             fprintf(stderr, "Error al llamar a fork();\n");
             exit(-1);
         }
-        else if (pid == 0)
+        else if (f_pid == 0)
         {
-            if (parsedCMD->piped)
+            if (parsedCmd->piped)
             {
                 redirectOutput();
                 closePipeReadWrite();
             }
-            useExec(parsedCMD->parsedArg);
+            useExec(parsedCmd->parsedArg);
         }
         else
         {
-            if (parsedCMD->piped)
+            if (parsedCmd->piped)
             {
-                pid2 = fork();
+                s_pid = fork();
 
-                if (pid2 < 0)
+                if (s_pid < 0)
                 {
                     fprintf(stderr, "Error al llamar a fork();\n");
                     exit(-1);
                 }
-                else if (pid2 == 0)
+                else if (s_pid == 0)
                 {
                     redirectInput();
                     closePipeReadWrite();
-                    useExec(parsedCMD->parsedArgPipe);
+                    useExec(parsedCmd->parsedArgPipe);
                 }
                 else
                 {
                     closePipeReadWrite();
-                    if (!parsedCMD->background)
+                    if (!parsedCmd->background)
                     {
-                        waitpid(pid, NULL, 0);
-                        waitpid(pid2, NULL, 0);
+                        waitpid(f_pid, NULL, 0);
+                        waitpid(s_pid, NULL, 0);
                     }
                 }
             }
             else
             {
-                if (!parsedCMD->background)
+                if (!parsedCmd->background)
                 {
-                    waitpid(pid, NULL, 0);
+                    waitpid(f_pid, NULL, 0);
                 }
             }
         }
     }
     else
     {
-        executeOwn(parsedCMD->parsedArg);
+        executeOwn(parsedCmd->parsedArg);
     }
 }
 
-void loopSystemCall()
+void doProcess()
+{
+    char *cmd = readInput();
+    printf("\n");
+    systemCall(cmd);
+    saveCmd(cmd);
+}
+
+void loopProcess()
 {
     do
     {
