@@ -1,3 +1,21 @@
+/*
+ * Universidad Nacional de Costa Rica
+ * Escuela de Informática
+ * EIF212 Sistemas Operativos
+ * Adolfo Di Carlo Martínez Martínez
+ * Mauricio Gutiérrez Vásquez
+ * 
+ * References:
+ * https://man7.org/linux/man-pages/man2/dup.2.html
+ * https://linux.die.net/man/2/dup
+ * https://stackoverflow.com/questions/33884291/pipes-dup2-and-exec
+ * https://www.geeksforgeeks.org/dup-dup2-linux-system-call/
+ * https://www.geeksforgeeks.org/c-program-demonstrate-fork-and-pipe/
+ * https://linux.die.net/man/2/waitpid
+ * Class explanation and examples
+ * 
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
